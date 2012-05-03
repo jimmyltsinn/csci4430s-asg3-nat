@@ -47,52 +47,67 @@ void nat_main(unsigned char *ip_pkt) {
     src_port = tcp -> source; 
 
     printe("Start process ... \n"); 
-    print_tcp(ip, tcp);
+
+    printe("Netmask  = 0x%8x\n", netmask);
+    printe("src_addr = 0x%8x [0x%8x]\n", src_addr, src_addr & netmask);
+    printe("internal = 0x%8x [0x%8x]\n", internal, internal & netmask);  
 
     if ((src_addr & netmask) == (internal & netmask)) {
         /* Out-bound packet */ 
-        if (tcp -> syn) {
-            /* Create entry */ 
-            int port; 
-            int sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-            struct sockaddr_in addr; 
-
-            addr.sin_family = AF_INET; 
-            addr.sin_addr.s_addr = INADDR_ANY; 
-
-            for (port = 55000; port <= 56000; ++port) {
-                addr.sin_port = port; 
-                if (bind(sockfd, (struct sockaddr *) &addr, sizeof(addr)) == 0)
-                    break; 
-            }
-
-            if (port > 56000) {
-                printf("No more port avaliable for new connection ... \n"); 
-                return;
-            }
-
-            tmp = nat_add(sockfd, port, src_addr, src_port); 
-        } else {
-            tmp = nat_search_src(src_addr, src_port); 
-        }
+        printe("Out-bound packet. \n"); 
         
-        if (!tmp)
-            return; 
+        tmp = nat_search_src(src_addr, src_port); 
+
+        if (!tmp) {
+            if (tcp -> syn) {
+                /* Create entry */ 
+                unsigned short port; 
+                int sockfd = socket(AF_INET, SOCK_STREAM, 0); 
+                struct sockaddr_in addr; 
+
+                printe("New record! \n"); 
+
+                addr.sin_family = AF_INET; 
+                addr.sin_addr.s_addr = INADDR_ANY; 
+
+                for (port = 55000; port <= 56000; ++port) {
+                    addr.sin_port = port; 
+                    if (bind(sockfd, (struct sockaddr *) &addr, sizeof(addr)) == 0)
+                        break; 
+                }
+
+                if (port > 56000) {
+                    printf("No more port avaliable for new connection ... \n"); 
+                    return;
+                }
+
+                printe("NAT Port = %d\n", port);
+
+                tmp = nat_add(sockfd, htons(port), src_addr, src_port); 
+            } else {
+                return; 
+            }
+        }
 
         if (tcp -> fin) 
             tmp -> state = (tmp -> state == 2) ? 3 : 1; 
 
+        printe("Change source address \n"); 
+
         src_addr = public; 
-        src_addr = tmp -> nat_port; 
+        src_port = tmp -> nat_port;
     }
 
     if (dest_addr == public) {
         /* In-bound packet */ 
+
+        printe("Inbound packet. \n"); 
         tmp = nat_search_port(dest_port); 
         
         if (!tmp) 
             return; 
 
+        printe("Changing destination address. \n"); 
         dest_addr = tmp -> src_addr; 
         dest_port = tmp -> src_port; 
 
@@ -100,20 +115,33 @@ void nat_main(unsigned char *ip_pkt) {
             tmp -> state = (tmp -> state == 1) ? 3 : 2; 
     }
 
-    if (tcp -> rst)
+    if (!tmp)
+        return;
+
+    if (tcp -> rst) {
+        printe("Reset! \n"); 
         tmp -> state = 4;
+    }
 
     if (tmp -> state == 4)
         if (!tcp -> fin)
             nat_del(tmp); 
 
+    /* Update the headers */ 
+    printe("Real update .. \n");
+    ip -> saddr = src_addr; 
+    ip -> daddr = dest_addr;
+    
+    tcp -> source = src_port; 
+    tcp -> dest = dest_port; 
+
     /* IP header checksum */ 
     ip -> check = 0x00;
-    ip -> check = ip_checksum((unsigned char *) ip);
+    ip -> check = ip_checksum((unsigned char *) ip_pkt);
 
     /* TCP checksum */ 
     tcp -> check = 0x00; 
-    tcp -> check = tcp_checksum((unsigned char *) tcp);
+    tcp -> check = tcp_checksum((unsigned char *) ip_pkt);
 
     printe("Finish NAT =]\n"); 
 }
@@ -142,7 +170,7 @@ int main(int argc, char **argv) {
     inet_aton(argv[2], &tmp_addr); 
     internal = tmp_addr.s_addr; 
 
-    netmask = 0xFFFFFFFF << (32 - atoi(argv[3]));
+    netmask = htonl(0xFFFFFFFF << (32 - atoi(argv[3])));
 
     ipq_handle = ipq_create_handle(0, PF_INET);
     if (!ipq_handle) {
@@ -172,6 +200,8 @@ int main(int argc, char **argv) {
             out(err); 
         }
 
+        printe("Packet received. \n"); 
+
         if (ipq_message_type(buf) == NLMSG_ERROR) {
             printe("Error packet (%d): %s\n", 
                 ipq_get_msgerr(buf), strerror(ipq_get_msgerr(buf))); 
@@ -182,7 +212,10 @@ int main(int argc, char **argv) {
 
         nat_main(msg -> payload); 
 
-        if (ipq_set_verdict(ipq_handle, msg -> packet_id, NF_ACCEPT, 0, NULL) < 0) {
+        print_tcp((struct iphdr *) msg -> payload, (struct tcphdr *) (((unsigned char *) msg -> payload) + ((struct iphdr *) (msg -> payload)) -> ihl * 4));
+        show_checksum(msg -> payload, msg -> data_len); 
+
+        if (ipq_set_verdict(ipq_handle, msg -> packet_id, NF_ACCEPT, msg -> data_len, msg -> payload) < 0) {
             int err = errno; 
             printe("ipq_set_verdict() (%d): %s\n", err, strerror(err));
             out(err); 
