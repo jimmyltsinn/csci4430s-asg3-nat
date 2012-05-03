@@ -5,7 +5,6 @@
 #include <netinet/ip.h>		// required by "struct iph"
 #include <netinet/tcp.h>	// required by "struct tcph"
 
-
 static unsigned short in_cksum(unsigned short* addr, int len)	// Interent checksum
 {
 	int nleft = len, sum = 0;
@@ -28,7 +27,7 @@ static unsigned short in_cksum(unsigned short* addr, int len)	// Interent checks
 	return ~sum;
 }
 
-static unsigned short ip_checksum(unsigned char *iphdr)
+unsigned short ip_checksum(unsigned char *iphdr)
 {
 	char buf[20];	// IP header size
 	struct iphdr *iph;

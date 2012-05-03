@@ -19,6 +19,8 @@
 #include <sys/socket.h>		// required by "inet_ntop()"
 #include <arpa/inet.h>		// required by "inet_ntop()"
 
+#include "list.h" 
+
 #define BUF_SIZE 1024
 
 #ifndef BUILD
@@ -30,10 +32,33 @@
 #define printe(fmt, ...) (0)
 #endif
 
+struct nat_list {
+    int sockfd;
+
+    int state;
+
+    u_int16_t nat_port; 
+
+    u_int32_t src_addr;  
+    u_int16_t src_port; 
+
+//    u_int32_t dest_addr;
+//    u_int16_t dest_port; 
+
+    struct list_head list;  
+}; 
+
+/* nat_list.c */ 
+struct nat_list *nat_add(int sockfd, u_int16_t nat_port, u_int32_t src_addr, u_int32_t src_port);
+struct nat_list *nat_search_port(u_int16_t nat_port);
+struct nat_list *nat_search_src(u_int32_t src_addr, u_int16_t src_port);
+void nat_del(struct nat_list *tmp); 
+
 /* utility.c */
 void print_tcp(struct iphdr *ip, struct tcphdr *tcp);
 
 /* ck.c */ 
+unsigned short ip_checksum(unsigned char *iphdr);
 unsigned short tcp_checksum(unsigned char *input); 
 void show_checksum(unsigned char *data, int len); 
 
