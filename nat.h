@@ -23,6 +23,8 @@
 
 #define BUF_SIZE 2048
 
+#define BUILD
+
 #ifndef BUILD
 #include <errno.h>
 #define printe(fmt, arg ...) \

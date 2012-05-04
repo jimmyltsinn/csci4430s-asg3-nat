@@ -10,7 +10,9 @@ void out(int ret) {
     if (ipq_handle)
         ipq_destroy_handle(ipq_handle);
 
-    system("/sbin/iptables -F");
+    system("/sbin/iptables -F -t filter");
+    system("/sbin/iptables -F -t nat");
+    system("/sbin/iptables -F -t mangle");
     printe("iptables flush\n"); 
 
     printf("Number of packet processed = %d\n", pkt_count); 
@@ -89,8 +91,12 @@ void nat_main(unsigned char *ip_pkt) {
             }
         }
 
-        if (tcp -> fin) 
+        if (tcp -> fin)
             tmp -> state = (tmp -> state == 2) ? 3 : 1; 
+
+        if (tmp -> state >= 3)
+            if (tcp -> ack)
+                tmp -> state = (tmp -> state == 5) ? 6 : 4; 
 
         printe("Change source address \n"); 
 
@@ -113,6 +119,10 @@ void nat_main(unsigned char *ip_pkt) {
 
         if (tcp -> fin)
             tmp -> state = (tmp -> state == 1) ? 3 : 2; 
+
+        if (tmp -> state >= 3)
+            if (tcp -> ack)
+                tmp -> state = (tmp -> state == 4) ? 6 : 5; 
     }
 
     if (!tmp)
@@ -120,12 +130,13 @@ void nat_main(unsigned char *ip_pkt) {
 
     if (tcp -> rst) {
         printe("Reset! \n"); 
-        tmp -> state = 4;
+        tmp -> state = 6;
     }
 
-    if (tmp -> state == 4)
-        if (!tcp -> fin)
-            nat_del(tmp); 
+    if (tmp -> state == 6) {
+        printe("Delete entry\n");
+        nat_del(tmp); 
+    }
 
     /* Update the headers */ 
     printe("Real update .. \n");
@@ -212,8 +223,10 @@ int main(int argc, char **argv) {
 
         nat_main(msg -> payload); 
 
+#ifndef BUILD
         print_tcp((struct iphdr *) msg -> payload, (struct tcphdr *) (((unsigned char *) msg -> payload) + ((struct iphdr *) (msg -> payload)) -> ihl * 4));
         show_checksum(msg -> payload, msg -> data_len); 
+#endif
 
         if (ipq_set_verdict(ipq_handle, msg -> packet_id, NF_ACCEPT, msg -> data_len, msg -> payload) < 0) {
             int err = errno; 
