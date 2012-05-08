@@ -86,7 +86,18 @@ void nat_main(unsigned char *ip_pkt) {
                 printe("NAT Port = %d\n", port);
 
                 tmp = nat_add(sockfd, htons(port), src_addr, src_port); 
+                do {
+                    struct in_addr tmp; 
+                    tmp.s_addr = src_addr; 
+                    printf("NEW entry: \n"); 
+                    printf("\tInternal IP: %s : %d\n", inet_ntoa(tmp), ntohs(src_port)); 
+                    tmp.s_addr = dest_addr; 
+                    printf("\tDestination: %s : %d\n", inet_ntoa(tmp), ntohs(dest_addr));
+                    printf("\tNAT Port: %d\n", port); 
+                    printf("\n"); 
+                } while (0); 
             } else {
+                printf("New entry. But ports are out of source! \n"); 
                 return; 
             }
         }
@@ -134,6 +145,14 @@ void nat_main(unsigned char *ip_pkt) {
     }
 
     if (tmp -> state == 6) {
+        do {
+            struct in_addr tmpa; 
+            tmpa.s_addr = tmp -> src_addr; 
+            printf("DELETE entry: \n"); 
+            printf("\tInternal IP: %s : %d\n", inet_ntoa(tmpa), ntohs(tmp -> src_port)); 
+            printf("\tNAT Port: %d\n", ntohs(tmp -> nat_port)); 
+            printf("\n"); 
+        } while (0); 
         printe("Delete entry\n");
         nat_del(tmp); 
     }
