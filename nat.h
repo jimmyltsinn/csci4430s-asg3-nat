@@ -21,7 +21,7 @@
 
 #include "list.h" 
 
-#define BUF_SIZE 2048
+#define BUF_SIZE 4194304
 
 #define BUILD
 

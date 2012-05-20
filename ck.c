@@ -48,7 +48,7 @@ struct pseudo_IP_header         /* The pseudo IP header (checksum calc) */
         unsigned short len;
 };
 
-#define PKT_BUF_SIZE	1500
+#define PKT_BUF_SIZE 65536
 
 unsigned short tcp_checksum(unsigned char *input)
 {

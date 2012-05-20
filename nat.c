@@ -13,11 +13,14 @@ void out(int ret) {
     system("/sbin/iptables -F -t filter");
     system("/sbin/iptables -F -t nat");
     system("/sbin/iptables -F -t mangle");
-    printe("iptables flush\n"); 
+    printe("All iptables flush\n"); 
 
     printf("Number of packet processed = %d\n", pkt_count); 
 
-    printf("Bye =]\n"); 
+    if (ret != 0)
+        printf("Exceptionally quited! \n"); 
+    else
+       printf("Bye =]\n"); 
 
     exit(0); 
 }
@@ -97,7 +100,7 @@ void nat_main(unsigned char *ip_pkt) {
                     printf("\n"); 
                 } while (0); 
             } else {
-                printf("New entry. But ports are out of source! \n"); 
+                printf("Non-SYN first packet ... Ignore\n"); 
                 return; 
             }
         }
@@ -215,6 +218,15 @@ int main(int argc, char **argv) {
         out(err); 
     }
 
+    do {
+        int size = 131072; 
+        if (setsockopt(ipq_handle -> fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size))) {
+            int err = errno; 
+            printe("setsockopt() (%d) : %s\n", err, strerror(err)); 
+            out(err); 
+        }
+    } while (0); 
+
     signal(SIGINT, sig_handler); 
     
     printf("Start NAT ...\n"); 
@@ -226,7 +238,7 @@ int main(int argc, char **argv) {
         printe("Waiting for packet ...\n");
         if (ipq_read(ipq_handle, buf, BUF_SIZE, 0) < 0) {
             int err = errno; 
-            printe("ipq_set_mode() (%d): %s\n", err, strerror(err));
+            printe("ipq_read() (%d): %s\n", err, strerror(err));
             out(err); 
         }
 
